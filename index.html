@@ -575,47 +575,125 @@ const letterAudios = {
   3: document.getElementById("letterAudio3")
 };
 
-// Draggable envelope
+// Draggable envelope state
 let isDragging = false;
-let offsetX, offsetY;
+let offsetX = 0, offsetY = 0;
+let startX = 0, startY = 0;
+let dragMoved = false;
+let justDragged = false;
+
 function clamp(val, min, max) { return Math.min(Math.max(val, min), max); }
 
+// MOUSE drag handlers
 envelope.addEventListener("mousedown", (e) => {
   isDragging = true;
+  dragMoved = false;
   envelope.style.transition = "none";
+  startX = e.clientX; startY = e.clientY;
   const rect = envelope.getBoundingClientRect();
   offsetX = e.clientX - rect.left;
   offsetY = e.clientY - rect.top;
 });
 document.addEventListener("mousemove", (e) => {
-  if(isDragging){
-    let x = e.clientX - offsetX;
-    let y = e.clientY - offsetY;
-    x = clamp(x, 0, window.innerWidth - envelope.offsetWidth);
-    y = clamp(y, 0, window.innerHeight - envelope.offsetHeight);
-    envelope.style.left = x + "px";
-    envelope.style.top = y + "px";
-  }
+  if (!isDragging) return;
+  const dx = Math.abs(e.clientX - startX);
+  const dy = Math.abs(e.clientY - startY);
+  if (dx + dy > 4) dragMoved = true;
+  let x = e.clientX - offsetX;
+  let y = e.clientY - offsetY;
+  x = clamp(x, 0, window.innerWidth - envelope.offsetWidth);
+  y = clamp(y, 0, window.innerHeight - envelope.offsetHeight);
+  envelope.style.left = x + "px";
+  envelope.style.top = y + "px";
+  // while dragging, cancel the centering transform so position is absolute
+  envelope.style.transform = "translate(0, 0)";
 });
 document.addEventListener("mouseup", () => {
-  if(isDragging){
-    isDragging = false;
-    envelope.style.transition = "transform 0.4s ease, left 0.4s ease, top 0.4s ease";
-    if(!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) {
-      envelope.style.left = '50%';
-      envelope.style.top = '50%';
-      envelope.style.transform = 'translate(-50%, -50%) scale(1)';
-    }
+  if (!isDragging) return;
+  isDragging = false;
+  envelope.style.transition = "transform 0.4s ease, left 0.4s ease, top 0.4s ease";
+  if (dragMoved) {
+    justDragged = true;
+    setTimeout(() => justDragged = false, 300);
+  }
+  dragMoved = false;
+  if (!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) {
+    envelope.style.left = '50%';
+    envelope.style.top = '50%';
+    envelope.style.transform = 'translate(-50%, -50%) scale(1)';
   }
 });
 
-// Envelope open/close
-function openEnvelope() { if(!isDragging) envelope.classList.add("open"); }
-function closeEnvelope() { if(!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) envelope.classList.remove("open"); }
+// TOUCH drag handlers (mobile)
+envelope.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  isDragging = true;
+  dragMoved = false;
+  startX = t.clientX; startY = t.clientY;
+  envelope.style.transition = "none";
+  const rect = envelope.getBoundingClientRect();
+  offsetX = t.clientX - rect.left;
+  offsetY = t.clientY - rect.top;
+  e.preventDefault();
+}, { passive: false });
 
-// Hover or click to open envelope
-if (/Mobi|Android/i.test(navigator.userAgent)) {
-  envelope.addEventListener("click", openEnvelope);
+document.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const t = e.touches[0];
+  const dx = Math.abs(t.clientX - startX);
+  const dy = Math.abs(t.clientY - startY);
+  if (dx + dy > 4) dragMoved = true;
+  let x = t.clientX - offsetX;
+  let y = t.clientY - offsetY;
+  x = clamp(x, 0, window.innerWidth - envelope.offsetWidth);
+  y = clamp(y, 0, window.innerHeight - envelope.offsetHeight);
+  envelope.style.left = x + "px";
+  envelope.style.top = y + "px";
+  envelope.style.transform = "translate(0, 0)";
+  e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('touchend', () => {
+  if (!isDragging) return;
+  isDragging = false;
+  envelope.style.transition = "transform 0.4s ease, left 0.4s ease, top 0.4s ease";
+  if (dragMoved) {
+    justDragged = true;
+    setTimeout(() => justDragged = false, 300);
+  }
+  dragMoved = false;
+  if (!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) {
+    envelope.style.left = '50%';
+    envelope.style.top = '50%';
+    envelope.style.transform = 'translate(-50%, -50%) scale(1)';
+  }
+});
+
+// Envelope open/close toggle (new, safe for mobile)
+function toggleEnvelope() {
+  // avoid toggles while actively dragging or immediately after a drag
+  if (isDragging || justDragged) return;
+  if (envelope.classList.contains("open")) {
+    if (!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) {
+      envelope.classList.remove("open");
+    }
+  } else {
+    envelope.classList.add("open");
+  }
+}
+
+// Keep existing open/close functions (used for desktop hover too)
+function openEnvelope() { if (!isDragging) envelope.classList.add("open"); }
+function closeEnvelope() { if (!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) envelope.classList.remove("open"); }
+
+// Use toggle on mobile; hover on desktop
+const isMobile = /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+if (isMobile) {
+  envelope.addEventListener("click", (e) => {
+    // prevent accidental toggle immediately after drag
+    e.preventDefault();
+    toggleEnvelope();
+  });
 } else {
   envelope.addEventListener("mouseenter", openEnvelope);
   envelope.addEventListener("mouseleave", closeEnvelope);
@@ -627,7 +705,7 @@ readBtn.addEventListener("click", () => {
   envelope.classList.add("open");
   stopAllAudios();
   bgMusic.currentTime = 0;
-  bgMusic.play().catch(e=>console.log(e));
+  bgMusic.play().catch(e => console.log(e));
 });
 
 // Close main paper
@@ -646,7 +724,7 @@ document.querySelectorAll(".letter-btn").forEach(btn => {
     envelope.classList.add("open");
     stopAllAudios();
     const audio = letterAudios[btn.dataset.letter];
-    if(audio) { audio.currentTime=0; audio.play().catch(e=>console.log(e)); }
+    if (audio) { audio.currentTime = 0; audio.play().catch(e => console.log(e)); }
   });
 });
 
@@ -657,63 +735,93 @@ document.querySelectorAll(".back-btn").forEach(btn => {
     paper.classList.add("show");
     stopAllAudios();
     bgMusic.currentTime = 0;
-    bgMusic.play().catch(e=>console.log(e));
+    bgMusic.play().catch(e => console.log(e));
   });
 });
 
 // Stop all audios
 function stopAllAudios(){
   bgMusic.pause();
-  Object.values(letterAudios).forEach(a=>{a.pause(); a.currentTime=0;});
+  Object.values(letterAudios).forEach(a => { a.pause(); a.currentTime = 0; });
 }
 
-// Floating Hearts
+/* ------------------------------------------------------------------
+   Optimized Floating Hearts (transform-based + fewer hearts on mobile)
+   ------------------------------------------------------------------ */
+
 const colors = ["#FF0000", "#800020", "#00008B", "#98FB98", "#D8BFD8"];
 let hearts = [];
-function createHeart(color){
+
+// Create a container for hearts (better layout painting)
+let heartsContainer = document.querySelector('.hearts-container');
+if (!heartsContainer) {
+  heartsContainer = document.createElement('div');
+  heartsContainer.className = 'hearts-container';
+  heartsContainer.style.position = 'fixed';
+  heartsContainer.style.left = '0';
+  heartsContainer.style.top = '0';
+  heartsContainer.style.width = '100%';
+  heartsContainer.style.height = '100%';
+  heartsContainer.style.pointerEvents = 'none';
+  heartsContainer.style.overflow = 'hidden';
+  heartsContainer.style.zIndex = '0';
+  document.body.appendChild(heartsContainer);
+}
+
+function createHeart(color) {
   const heart = document.createElement("div");
   heart.className = "heart";
-  let size = 10 + Math.random()*20;
-  heart.style.width = size+'px';
-  heart.style.height = size+'px';
+  const size = 10 + Math.random() * 20;
   heart.dataset.size = size;
   heart.dataset.color = color;
-  heart.vy = 1 + Math.random()*2;
+  heart._x = Math.random() * window.innerWidth;
+  heart._y = -Math.random() * 200;
+  heart.vy = 0.6 + Math.random() * 1.8;
+  heart.style.width = (size) + 'px';
+  heart.style.height = (size) + 'px';
   heart.style.backgroundImage = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 29"><path fill="${color.replace("#","%23")}" d="M23.6,0c-2.8,0-5.1,1.6-6.6,3.9C15.5,1.6,13.2,0,10.4,0C4.6,0,0,4.6,0,10.4c0,6.6,10.7,12.5,16,18.6c5.3-6.1,16-12,16-18.6C32,4.6,27.4,0,23.6,0z"/></svg>')`;
-  heart.style.left = Math.random()*window.innerWidth+'px';
-  heart.style.top = -Math.random()*200+'px';
-  document.body.appendChild(heart);
+  heart.style.position = 'absolute';
+  heart.style.left = '0px';
+  heart.style.top = '0px';
+  heart.style.transform = `translate3d(${Math.round(heart._x)}px, ${Math.round(heart._y)}px, 0) scale(${size/20})`;
+  heart.style.willChange = 'transform, filter, opacity';
+  heartsContainer.appendChild(heart);
   return heart;
 }
-for(let i=0;i<200;i++){
-  hearts.push(createHeart(colors[Math.floor(Math.random()*colors.length)]));
+
+const heartCount = isMobile ? 50 : 200;
+for (let i = 0; i < heartCount; i++) {
+  hearts.push(createHeart(colors[Math.floor(Math.random() * colors.length)]));
 }
-function animateHearts(){
-  hearts.forEach(h=>{
-    let top = parseFloat(h.style.top);
-    top += h.vy;
-    h.style.top = top+'px';
-    if(envelope.classList.contains("open")) {
-      let glow = 2 + Math.sin(Date.now()/200)*8;
-      h.style.filter = `drop-shadow(0 0 ${glow}px rgba(128,0,32,0.7))`;
-    } else { h.style.filter = 'none'; }
-    let color = envelope.classList.contains("open") ? "#800020" : h.dataset.color;
-    h.style.backgroundImage = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 29"><path fill="${color.replace("#","%23")}" d="M23.6,0c-2.8,0-5.1,1.6-6.6,3.9C15.5,1.6,13.2,0,10.4,0C4.6,0,0,4.6,0,10.4c0,6.6,10.7,12.5,16,18.6c5.3-6.1,16-12,16-18.6C32,4.6,27.4,0,23.6,0z"/></svg>')`;
-    if(top>window.innerHeight){
-      h.style.top = -Math.random()*200+'px';
-      h.style.left = Math.random()*window.innerWidth+'px';
-      h.vy = 1 + Math.random()*2;
+
+let lastTime = performance.now();
+function animateHearts(time) {
+  const dt = Math.min(32, time - lastTime);
+  lastTime = time;
+  const open = envelope.classList.contains("open");
+  for (let i = 0; i < hearts.length; i++) {
+    const h = hearts[i];
+    h._y += h.vy * (dt / 16); // stable movement
+    if (h._y > window.innerHeight) {
+      h._y = -Math.random() * 200;
+      h._x = Math.random() * window.innerWidth;
+      h.vy = 0.6 + Math.random() * 1.8;
     }
-  });
+    h.style.transform = `translate3d(${Math.round(h._x)}px, ${Math.round(h._y)}px, 0) scale(${h.dataset.size/20})`;
+    if (open) {
+      const glow = 2 + Math.sin(Date.now()/300) * 6;
+      h.style.filter = `drop-shadow(0 0 ${Math.round(glow)}px rgba(128,0,32,0.55))`;
+      h.style.backgroundImage = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 29"><path fill="%23800020" d="M23.6,0c-2.8,0-5.1,1.6-6.6,3.9C15.5,1.6,13.2,0,10.4,0C4.6,0,0,4.6,0,10.4c0,6.6,10.7,12.5,16,18.6c5.3-6.1,16-12,16-18.6C32,4.6,27.4,0,23.6,0z"/></svg>')`;
+    } else {
+      h.style.filter = 'none';
+      const color = h.dataset.color || colors[Math.floor(Math.random()*colors.length)];
+      h.style.backgroundImage = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 29"><path fill="${color.replace("#","%23")}" d="M23.6,0c-2.8,0-5.1,1.6-6.6,3.9C15.5,1.6,13.2,0,10.4,0C4.6,0,0,4.6,0,10.4c0,6.6,10.7,12.5,16,18.6c5.3-6.1,16-12,16-18.6C32,4.6,27.4,0,23.6,0z"/></svg>')`;
+    }
+  }
   requestAnimationFrame(animateHearts);
 }
-animateHearts();
+requestAnimationFrame(animateHearts);
+
 </script>
 </body>
 </html>
-
-
-
-
-
-
