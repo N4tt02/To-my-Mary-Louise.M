@@ -685,20 +685,32 @@ function toggleEnvelope() {
 // Keep existing open/close functions (used for desktop hover too)
 function openEnvelope() { if (!isDragging) envelope.classList.add("open"); }
 function closeEnvelope() { if (!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) envelope.classList.remove("open"); }
-
 // Use toggle on mobile; hover on desktop
 const isMobile = /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
 if (isMobile) {
-  // Use touchend instead of click for better reliability
+  let touchStartX = 0, touchStartY = 0;
+
+  envelope.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+  }, { passive: true });
+
   envelope.addEventListener("touchend", (e) => {
-    if (!justDragged) {
+    const t = e.changedTouches[0];
+    const dx = Math.abs(t.clientX - touchStartX);
+    const dy = Math.abs(t.clientY - touchStartY);
+
+    // If finger didn’t move much → treat as tap
+    if (dx < 10 && dy < 10) {
       toggleEnvelope();
     }
-    e.preventDefault();
   });
 } else {
   envelope.addEventListener("mouseenter", openEnvelope);
   envelope.addEventListener("mouseleave", closeEnvelope);
+}
 }
 // Play main music on Read button
 readBtn.addEventListener("click", () => {
@@ -826,4 +838,5 @@ requestAnimationFrame(animateHearts);
 </script>
 </body>
 </html>
+
 
