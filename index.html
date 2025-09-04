@@ -561,30 +561,34 @@ h1,h2,h3 { font-family: 'Great Vibes', cursive; }
 </div>
 
 <script>
-// Elements
-const envelope = document.getElementById("envelope");
+/* === Elements & audio === */
+const envelope = document.getElementById("envelope"); // envelope container (id="envelope")
 const readBtn = document.getElementById("readBtn");
 const paper = document.getElementById("paper");
 const closeBtn = document.getElementById("closeBtn");
 const bgMusic = document.getElementById("bgMusic");
 
-// Letter audio elements
 const letterAudios = {
   1: document.getElementById("letterAudio1"),
   2: document.getElementById("letterAudio2"),
   3: document.getElementById("letterAudio3")
 };
 
-// Draggable envelope state
+/* === device detection === */
+const isMobile = /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+/* === Drag / Touch state === */
 let isDragging = false;
 let offsetX = 0, offsetY = 0;
 let startX = 0, startY = 0;
 let dragMoved = false;
-let justDragged = false;
+let justDragged = false; // short cooldown after a drag to prevent accidental toggles
 
 function clamp(val, min, max) { return Math.min(Math.max(val, min), max); }
 
-// MOUSE drag handlers
+/* -------------------------
+   MOUSE drag handlers
+   ------------------------- */
 envelope.addEventListener("mousedown", (e) => {
   isDragging = true;
   dragMoved = false;
@@ -594,6 +598,7 @@ envelope.addEventListener("mousedown", (e) => {
   offsetX = e.clientX - rect.left;
   offsetY = e.clientY - rect.top;
 });
+
 document.addEventListener("mousemove", (e) => {
   if (!isDragging) return;
   const dx = Math.abs(e.clientX - startX);
@@ -608,6 +613,7 @@ document.addEventListener("mousemove", (e) => {
   // while dragging, cancel the centering transform so position is absolute
   envelope.style.transform = "translate(0, 0)";
 });
+
 document.addEventListener("mouseup", () => {
   if (!isDragging) return;
   isDragging = false;
@@ -624,25 +630,33 @@ document.addEventListener("mouseup", () => {
   }
 });
 
-// TOUCH drag handlers (mobile)
+/* -------------------------
+   TOUCH drag handlers (mobile)
+   - touchstart on envelope
+   - touchmove & touchend on document
+   ------------------------- */
 envelope.addEventListener('touchstart', (e) => {
   const t = e.touches[0];
   isDragging = true;
   dragMoved = false;
-  startX = t.clientX; startY = t.clientY;
   envelope.style.transition = "none";
+  startX = t.clientX; startY = t.clientY;
   const rect = envelope.getBoundingClientRect();
   offsetX = t.clientX - rect.left;
   offsetY = t.clientY - rect.top;
-  e.preventDefault();
-}, { passive: false });
+  // do not preventDefault here so the browser can still handle non-drag gestures
+}, { passive: true });
 
 document.addEventListener('touchmove', (e) => {
   if (!isDragging) return;
   const t = e.touches[0];
   const dx = Math.abs(t.clientX - startX);
   const dy = Math.abs(t.clientY - startY);
-  if (dx + dy > 4) dragMoved = true;
+  if (dx + dy > 4) {
+    dragMoved = true;
+    // while actually dragging, prevent scroll
+    e.preventDefault();
+  }
   let x = t.clientX - offsetX;
   let y = t.clientY - offsetY;
   x = clamp(x, 0, window.innerWidth - envelope.offsetWidth);
@@ -650,31 +664,38 @@ document.addEventListener('touchmove', (e) => {
   envelope.style.left = x + "px";
   envelope.style.top = y + "px";
   envelope.style.transform = "translate(0, 0)";
-  e.preventDefault();
 }, { passive: false });
 
-document.addEventListener('touchend', () => {
+document.addEventListener('touchend', (e) => {
+  // if we never started dragging on envelope, ignore
   if (!isDragging) return;
   isDragging = false;
   envelope.style.transition = "transform 0.4s ease, left 0.4s ease, top 0.4s ease";
+
   if (dragMoved) {
+    // ended a drag
     justDragged = true;
     setTimeout(() => justDragged = false, 300);
-  }
-  dragMoved = false;
-  if (!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) {
-    envelope.style.left = '50%';
-    envelope.style.top = '50%';
-    envelope.style.transform = 'translate(-50%, -50%) scale(1)';
+    dragMoved = false;
+    if (!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) {
+      envelope.style.left = '50%';
+      envelope.style.top = '50%';
+      envelope.style.transform = 'translate(-50%, -50%) scale(1)';
+    }
+  } else {
+    // it was a tap (touchstart + touchend with little movement)
+    // toggle envelope (but avoid toggling if in justDragged state — not relevant here but safe)
+    if (!justDragged) toggleEnvelope();
   }
 });
 
-// Envelope open/close toggle (new, safe for mobile)
+/* -------------------------
+   Envelope toggle functions (kept)
+   ------------------------- */
 function toggleEnvelope() {
-  // avoid toggles while actively dragging or immediately after a drag
   if (isDragging || justDragged) return;
   if (envelope.classList.contains("open")) {
-    if (!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) {
+    if(!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) {
       envelope.classList.remove("open");
     }
   } else {
@@ -682,42 +703,20 @@ function toggleEnvelope() {
   }
 }
 
-// Keep existing open/close functions (used for desktop hover too)
-function openEnvelope() { if (!isDragging) envelope.classList.add("open"); }
-function closeEnvelope() { if (!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) envelope.classList.remove("open"); }
+function openEnvelope() { if(!isDragging) envelope.classList.add("open"); }
+function closeEnvelope() { if(!paper.classList.contains("show") && !document.querySelector(".letter-paper.show")) envelope.classList.remove("open"); }
 
-  // Use toggle on mobile; hover on desktop
-const isMobile = /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-
-if (isMobile) {
-  let touchStartX = 0, touchStartY = 0;
-  let isTap = false;
-
-  envelope.addEventListener("touchstart", (e) => {
-    const t = e.touches[0];
-    touchStartX = t.clientX;
-    touchStartY = t.clientY;
-    isTap = true; // assume tap unless moved
-  }, { passive: true });
-
-  envelope.addEventListener("touchmove", (e) => {
-    const t = e.touches[0];
-    const dx = Math.abs(t.clientX - touchStartX);
-    const dy = Math.abs(t.clientY - touchStartY);
-    if (dx > 10 || dy > 10) {
-      isTap = false; // it’s a drag, not a tap
-    }
-  }, { passive: true });
-
-  envelope.addEventListener("touchend", (e) => {
-    if (isTap) {
-      toggleEnvelope(); // open/close on tap
-    }
-  });
-} else {
+/* -------------------------
+   Desktop hover behavior (preserved)
+   ------------------------- */
+if (!isMobile) {
   envelope.addEventListener("mouseenter", openEnvelope);
   envelope.addEventListener("mouseleave", closeEnvelope);
-}}
+}
+
+/* -------------------------
+   Audio + UI handlers (preserved)
+   ------------------------- */
 // Play main music on Read button
 readBtn.addEventListener("click", () => {
   paper.classList.add("show");
@@ -758,7 +757,7 @@ document.querySelectorAll(".back-btn").forEach(btn => {
   });
 });
 
-// Stop all audios
+// Stop all audios (preserved)
 function stopAllAudios(){
   bgMusic.pause();
   Object.values(letterAudios).forEach(a => { a.pause(); a.currentTime = 0; });
@@ -766,12 +765,14 @@ function stopAllAudios(){
 
 /* ------------------------------------------------------------------
    Optimized Floating Hearts (transform-based + fewer hearts on mobile)
+   - Uses translate3d for GPU-friendly motion
+   - FPS-independent movement (scaled by dt)
    ------------------------------------------------------------------ */
 
 const colors = ["#FF0000", "#800020", "#00008B", "#98FB98", "#D8BFD8"];
 let hearts = [];
 
-// Create a container for hearts (better layout painting)
+// ensure hearts don't block pointer events (so envelope always receives taps)
 let heartsContainer = document.querySelector('.hearts-container');
 if (!heartsContainer) {
   heartsContainer = document.createElement('div');
@@ -813,6 +814,7 @@ for (let i = 0; i < heartCount; i++) {
   hearts.push(createHeart(colors[Math.floor(Math.random() * colors.length)]));
 }
 
+/* FPS-independent animation loop (stable on slow devices) */
 let lastTime = performance.now();
 function animateHearts(time) {
   const dt = Math.min(32, time - lastTime);
@@ -820,30 +822,32 @@ function animateHearts(time) {
   const open = envelope.classList.contains("open");
   for (let i = 0; i < hearts.length; i++) {
     const h = hearts[i];
-    h._y += h.vy * (dt / 16); // stable movement
-    if (h._y > window.innerHeight) {
-      h._y = -Math.random() * 200;
+    h._y += h.vy * (dt / 16); // scale by dt (16ms ~ 60fps)
+    if (h._y > window.innerHeight + 50) {
+      h._y = -50;
       h._x = Math.random() * window.innerWidth;
       h.vy = 0.6 + Math.random() * 1.8;
     }
     h.style.transform = `translate3d(${Math.round(h._x)}px, ${Math.round(h._y)}px, 0) scale(${h.dataset.size/20})`;
     if (open) {
-      const glow = 2 + Math.sin(Date.now()/300) * 6;
+      const glow = 2 + Math.sin(Date.now() / 300) * 6;
       h.style.filter = `drop-shadow(0 0 ${Math.round(glow)}px rgba(128,0,32,0.55))`;
       h.style.backgroundImage = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 29"><path fill="%23800020" d="M23.6,0c-2.8,0-5.1,1.6-6.6,3.9C15.5,1.6,13.2,0,10.4,0C4.6,0,0,4.6,0,10.4c0,6.6,10.7,12.5,16,18.6c5.3-6.1,16-12,16-18.6C32,4.6,27.4,0,23.6,0z"/></svg>')`;
     } else {
       h.style.filter = 'none';
-      const color = h.dataset.color || colors[Math.floor(Math.random()*colors.length)];
+      const color = h.dataset.color || colors[Math.floor(Math.random() * colors.length)];
       h.style.backgroundImage = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 29"><path fill="${color.replace("#","%23")}" d="M23.6,0c-2.8,0-5.1,1.6-6.6,3.9C15.5,1.6,13.2,0,10.4,0C4.6,0,0,4.6,0,10.4c0,6.6,10.7,12.5,16,18.6c5.3-6.1,16-12,16-18.6C32,4.6,27.4,0,23.6,0z"/></svg>')`;
     }
   }
   requestAnimationFrame(animateHearts);
 }
 requestAnimationFrame(animateHearts);
+</script>
 
 </script>
 </body>
 </html>
+
 
 
 
