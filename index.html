@@ -689,16 +689,17 @@ function closeEnvelope() { if (!paper.classList.contains("show") && !document.qu
 // Use toggle on mobile; hover on desktop
 const isMobile = /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 if (isMobile) {
-  envelope.addEventListener("click", (e) => {
-    // prevent accidental toggle immediately after drag
+  // Use touchend instead of click for better reliability
+  envelope.addEventListener("touchend", (e) => {
+    if (!justDragged) {
+      toggleEnvelope();
+    }
     e.preventDefault();
-    toggleEnvelope();
   });
 } else {
   envelope.addEventListener("mouseenter", openEnvelope);
   envelope.addEventListener("mouseleave", closeEnvelope);
 }
-
 // Play main music on Read button
 readBtn.addEventListener("click", () => {
   paper.classList.add("show");
@@ -825,3 +826,4 @@ requestAnimationFrame(animateHearts);
 </script>
 </body>
 </html>
+
